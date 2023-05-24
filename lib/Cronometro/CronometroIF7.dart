@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 
 import 'package:vibration/vibration.dart';
+import 'package:flutter_isolate/flutter_isolate.dart';
 
 class Cronometro extends StatefulWidget {
   @override
@@ -12,10 +13,51 @@ class _CronometroState extends State<Cronometro> {
   int segundosPasados = 0;
   bool estaCorriendo = false;
   int repeticiones = 1;
-  int repeticionesRestantes = 1;
+  int repeticionesRestantes = 0;
   int minutoParada = 1;
   int repeticionActual = 1;
   Timer? cronometro;
+  FlutterIsolate? backgroundIsolate;
+
+  @override
+  void initState() {
+    super.initState();
+    startBackgroundIsolate();
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+    stopBackgroundIsolate();
+  }
+
+  void startBackgroundIsolate() async {
+    backgroundIsolate = await FlutterIsolate.spawn(runBackgroundTimer, null);
+  }
+
+  void stopBackgroundIsolate() {
+    if (backgroundIsolate != null) {
+      backgroundIsolate!.kill();
+      backgroundIsolate = null;
+    }
+  }
+
+  static void runBackgroundTimer(dynamic _) {
+    int segundosPasados = 0;
+    int repeticionesRestantes = 1; // Actualiza este valor con el número de vueltas restantes
+
+    Timer.periodic(Duration(seconds: 1), (Timer timer) {
+      segundosPasados++;
+      if (segundosPasados >= 60) {
+        segundosPasados = 0;
+        repeticionesRestantes--;
+        if (repeticionesRestantes <= 0) {
+          timer.cancel();
+
+        }
+      }
+    });
+  }
 
   void iniciarCronometro() {
     cronometro = Timer.periodic(Duration(seconds: 1), (timer) {
@@ -23,25 +65,29 @@ class _CronometroState extends State<Cronometro> {
         segundosPasados++;
         if (segundosPasados >= 60) {
           segundosPasados = 0;
-          if (segundosPasados % 60 == 0 && segundosPasados ~/ 60 == minutoParada) {
+          if (segundosPasados % 60 == 0 &&
+              segundosPasados ~/ 60 == minutoParada) {
             detenerCronometro();
             mostrarDialogoFinalizado();
-            Vibration.vibrate(duration: 2000);
+
           }
+          Vibration.vibrate();
+          iniciarSiguienteRepeticion();
         }
       });
     });
   }
 
   void iniciarSiguienteRepeticion() {
+    repeticiones=repeticionesRestantes;
     if (repeticionesRestantes > 0) {
       setState(() {
         repeticionesRestantes--;
         repeticionActual = repeticiones - repeticionesRestantes;
         segundosPasados = 0;
       });
-      iniciarCronometro();
     }
+    detenerCronometro();
   }
 
   void detenerCronometro() {
@@ -52,7 +98,7 @@ class _CronometroState extends State<Cronometro> {
     setState(() {
       segundosPasados = 0;
       repeticionesRestantes = repeticiones;
-      repeticionActual = 1;
+      repeticionActual = 0;
       estaCorriendo = false;
     });
     detenerCronometro();
@@ -108,7 +154,7 @@ class _CronometroState extends State<Cronometro> {
               obtenerTiempoFormateado(),
               style: TextStyle(fontSize: 40),
             ),
-            Text("Vueltas Restantes: "+repeticionesRestantes.toString()),
+            Text("Vueltas Restantes: " + repeticionesRestantes.toString()),
             SizedBox(height: 20),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -167,7 +213,6 @@ class _CronometroState extends State<Cronometro> {
                 IconButton(
                   icon: Icon(estaCorriendo ? Icons.pause : Icons.play_arrow),
                   color: Colors.green,
-
                   onPressed: () {
                     setState(() {
                       estaCorriendo = !estaCorriendo;
@@ -197,4 +242,3 @@ class _CronometroState extends State<Cronometro> {
     );
   }
 }
-
